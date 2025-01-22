@@ -1,7 +1,9 @@
 # 1. Overview
 This repository provides the source code of our paper, Capturing User Interests from Data Streams
 for Continual Sequential Recommendation(CSTRec).
-![Sample Figure](images/method.png)
+
+<img src="images/method.png" alt="Sample Figure" width="50%">
+
 
 
 # 2. Environment
