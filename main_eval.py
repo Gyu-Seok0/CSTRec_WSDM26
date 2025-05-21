@@ -19,8 +19,8 @@ from eval_utils import *
 from config import get_config
 from data_loader import SeqRecDataset, NewUserDataset, FullBatchDataset
 
-from models.CSR import CSR
 from models.SASREC import SASREC
+from models.CSR import CSR
 
 def main(args):
     
@@ -33,52 +33,13 @@ def main(args):
     backbone = SASREC(args.max_user, args.max_item, device, args)
     losses = {'total_loss' : 0.0, 'pos_loss' : 0.0, 'neg_loss' : 0.0}
     
-    if args.method in ['Full_batch', 'Fine_tune']:
-        model = backbone
-    
-    elif args.method in ["CSR", "CSR_delta"]:
-        model = eval(args.method)(args.max_user, args.max_item, args.hidden_dims, args.num_CSR_layer, args.num_CSR_head, args.dropout_rate, args.window_size, args.std_lambda, args.num_CSR_neighbor, args.CSR_temperature, 
-                    args.use_plasticity, args.use_stability, args.num_P, args.P_length, args.num_S, args.S_length, args.matching_loss_lambda, args.DPA, device)
+    if args.method == "CSR":
+        model = eval(args.method)(args.max_user, args.max_item, args.hidden_dims, args.num_CSR_layer, args.num_CSR_head, args.dropout_rate, args.window_size, args.CSR_std_lambda, args.num_PKA_neighbor, args.CSR_temperature, 
+                     args.use_current, args.use_historical, args.num_C, args.C_length, args.num_H, args.H_length, args.matching_loss_lambda, device)
+        model.toggle_csn(args.use_csn)
+        
         losses['std_loss'] = 0.0
         losses['matching_loss'] = 0.0
-    
-    elif args.method == "IMSR_SASREC":
-        model = IMSR_SASREC(args.max_user, args.max_item, args.hidden_dims, args.dropout_rate, args.num_interest, args.num_routing_layer, args.multi_interest_func, args.IMSR_temperature, args.IMSR_kd_lambda, args.IMSR_logit_weight, device, args)
-        losses['kd_loss'] = 0.0
-    
-    elif args.method == "IMSR":
-        model = IMSR(args.max_user, args.max_item, args.hidden_dims, args.dropout_rate, args.num_interest, args.num_routing_layer, args.multi_interest_func, args.IMSR_temperature, args.IMSR_kd_lambda, device)
-        losses = {'total_loss' : 0.0, 'loss_ss' : 0.0, 'KD_loss': 0.0}
-        
-    elif args.method == "Proposed":
-        model = Proposed(args.max_user, args.max_item, args.hidden_dims, args.num_proposed_layer, args.num_proposed_head, args.std_lambda, args.prompt_lambda, args.num_prompt, args.num_use_prompt, 
-                         args.use_stability, args.use_plasticity, args.feats_agg, args.penalty_func, args.adaptive_update, args.num_proposed_topk_neighbor, args.assign_func, 
-                         args.proposed_temperature, args.prompt_shared, args.dropout_rate, args.window_size, args.DPA, device)
-        losses['std_loss'] = 0.0
-        losses['prompt_loss'] = 0.0
-    
-    elif args.method == "LimaRec_V2":
-        model = LimaRec_V2(args.max_user, args.max_item, args.hidden_dims, args.num_LimaRec_layer, args.num_LimaRec_head, args.LimaRec_lambda, args.dropout_rate, args.window_size, device)
-        losses['std_loss'] = 0.0
-    
-    elif args.method == "LimaRec":
-        model = LimaRec(args.max_user, args.max_item, args.hidden_dims, args.num_LimaRec_layer, args.num_LimaRec_head, args.dropout_rate, args.window_size, device)
-        
-    elif args.method == "LinRec":
-        model = LinRec(args.max_item, args.hidden_dims, args.num_LinRec_layer, args.num_LinRec_head, args.dropout_rate, args.window_size, device)
-    
-    elif args.method == "HPMN":
-        model = HPMN(args.max_item, args.hidden_dims, args.num_HPMN_layer, args.num_HPMN_att_layer, args.HPMN_lambda, args.dropout_rate, args.use_HPMN_layer_norm, args.device)
-        losses['memory_loss'] = 0.0
-    
-    elif args.method == "Reloop2":
-        model = Reloop2(backbone, args.max_item, args.memory_size, args.sc_gamma, args.sc_lambda, args.sc_start_epoch, device)
-    
-    elif args.method == "LWC_KD_PIW":
-        model = LWC_KD_PIW(backbone, args.update_start_block_id, args.num_LWC_KD_layer, args.LWC_KD_temperature, args.LWC_KD_lambda, 
-                           args.num_cluster, args.random_seed, args.hidden_dims, args.PIW_lambda, args.item_side_only, device)
-        for loss in ['UI_loss', 'IU_loss', 'UU_loss', 'II_loss', 'cluster_loss']:
-            losses[loss] = 0.0
     else:
         raise ValueError(f"Unsupported method: {args.method}")
     
@@ -107,7 +68,8 @@ def main(args):
     # eval info
     prev_valid_LA_sum = dict()
     prev_test_LA_sum = dict()
-    cl_total_test_result = [] # list[dict(), ...]
+    cl_total_test_result = list() # list[dict(), ...]
+    block_results = list()
     
     for K in args.eval_K_list:
         for metric in ["H", "M", "N"]:
@@ -137,7 +99,7 @@ def main(args):
         eval_dataloader_list.append(deepcopy(eval_dataloader))
         del eval_dataloader
     
-        if block_id > 1 and (args.method == "Full_batch" or args.FB == True): #, "HPMN", "LinRec", "LimaRec"]:
+        if block_id > 1 and args.FB == True:
             print("Using Full_batch_dataset!")
             dataset = FullBatchDataset(prev_dataset, dataset) # Integrate the previous and current dataset.
             dataloder = DataLoader(dataset, args.batch_size, shuffle = True, drop_last = False)
@@ -157,42 +119,17 @@ def main(args):
             continue
                 
         ''' Training & Validation '''
-        if block_id >= args.update_start_block_id:
-            if args.method == "LWC_KD_PIW":
-                common_user_ids = each_block_user_ids[block_id-1].intersection(each_block_user_ids[block_id])
-                common_user_ids = torch.tensor(list(common_user_ids))
-                
-                common_item_ids = each_block_item_ids[block_id-1].intersection(each_block_item_ids[block_id])
-                common_item_ids = torch.tensor(list(common_item_ids))
-                
-                cur_R, prev_R, prev_UU, prev_II = prepare_LWCKD_data(block_id, prev_dataset, dataset, seen_max_user_id_list, seen_max_item_id_list, args.num_LWC_KD_topk_neighbor, device)
-                model.update(block_id, cur_R, prev_R, prev_UU, prev_II, common_user_ids, common_item_ids)
-        
-            elif args.method in ["LimaRec", "LimaRec_V2"]:
-                model.update(eval_dataloader_list[-2])
-                
-            elif args.method == "Proposed" and args.update:
-                model.update(eval_dataloader_list[-2])
-            
-            elif args.method in ["IMSR", "IMSR_SASREC"]:
-                model.update_prev_info()
-            
-            elif args.method in ["CSR", "CSR_delta"] and args.update:
+        if block_id >= args.update_start_block_id and args.method == "CSR" and args.update:
                 model.update_history(eval_dataloader_list[-2])
-                
-                if args.method == "CSR":
-                    model.update_block_id(block_id)
-        
+
         model = model.to(device)
         optimizer = Adam(model.parameters(), lr = args.lr, weight_decay = 0.0 if block_id == 0 else args.reg)
-        best_model_param = train(dataloder, model, device, criterion, optimizer, losses, prev_valid_LA_sum, block_id, eval_dataloader_list, new_user_dataloader_list, seen_max_item_id_list, new_user_ids, args, target_metric = "cur")
+        best_model_param, train_results = train(dataloder, model, device, criterion, optimizer, losses, prev_valid_LA_sum, block_id, eval_dataloader_list, new_user_dataloader_list, seen_max_item_id_list, new_user_ids, args, target_metric = "cur")
+        block_results += train_results
         
         # After training...
         model.load_state_dict(best_model_param)
         model = model.to(device)
-        
-        if args.fast_check:
-            continue
                 
         print("\n\t[The best valid result]")
         if args.eval_RA:
@@ -214,6 +151,11 @@ def main(args):
         
         try:
             cl_result_to_csv(cl_total_test_result, args.eval_K_list, file_path = args.cl_result_save_path)
+            log_path = "/".join(args.cl_result_save_path.split('/')[:-1])
+            log_path = log_path.replace('cl_result', 'training_log')
+            Path(log_path).mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(block_results).to_csv(f"{log_path}/df_rs_{str(args.random_seed)}.csv", index=False)
+            print(f"[SAVE training_log] {log_path}")
         except Exception as e:   
             print('[Error]', e)
         

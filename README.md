@@ -1,18 +1,37 @@
-# 1. Overview
-This repository provides the source code of our paper, Capturing User Interests from Data Streams
-for Continual Sequential Recommendation(CSTRec).
+# Overview
 
-<img src="images/method.png" alt="Sample Figure" width="50%">
+This repository contains the source code for our paper: **Capturing User Interests from Data Streams for Continual Sequential Recommendation (CSTRec)**
 
+<p align="center">
+  <img src="images/method.png" alt="CSTRec Method Overview" width="100%">
+</p>
 
+---
 
-# 2. Environment
+# Environment Setup
+
+```bash
+# Create the Conda environment
+conda env create -f env.yml
+
+# Activate the environment
+conda activate CSTRec
 ```
-conda env create --file env.yml
-conda active CSTRec
-```
 
-# 3. Command
-```
-python main_eval.py --d ml-1m --m CSR
-```
+---
+
+# Usage
+
+1. **Unzip the dataset**
+
+   ```bash
+   unzip <dataset>.zip -d data/
+   ```
+2. **Run the model**
+   ```bash
+   ./run.sh [dataset]
+   ```
+* Supported datasets: gowalla, ml-1m, yelp
+
+    Note: The run.sh script includes a --fc (fast check) option by default for quick testing.
+To execute the full training and evaluation pipeline, remove the --fc flag.

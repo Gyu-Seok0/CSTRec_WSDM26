@@ -7,19 +7,15 @@ import torch
 from utils import print_cl_result, get_gpu_memory
 from eval_utils import continual_evaluate, evaluate
 
-def train_epoch(dataloder, model, device, epoch, criterion, optimizer, epoch_losses, args, block_id):
+def train_epoch(dataloder, model, device, epoch, criterion, optimizer, epoch_losses, args):
     
     start_time = time()
     
     dataloder.dataset.mode = "Train"
     if epoch == 1 or epoch % args.neg_cycle == 0:
+        print("\t[Negative Sampling]")
         dataloder.dataset.neg_sampling_train()
         
-    # if block_id == 2 and args.method == "CSR":
-    #     print(f"Train block_id:{block_id} for debug")
-    #     import pdb; pdb.set_trace()
-        
-    
     model.train()
     for batch in tqdm(dataloder): # batch = {user_ids : tensor(), train_seqs : tensor(), pos_seqs : tensor(), neg_seqs : tensor()}
         
@@ -31,10 +27,6 @@ def train_epoch(dataloder, model, device, epoch, criterion, optimizer, epoch_los
         # backward
         optimizer.zero_grad()
         total_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5) # add
-        # import pdb; pdb.set_trace() 
-        # for name, param in model.named_parameters():
-        #     print(name, param, param.grad)
         optimizer.step()
         
         for loss in epoch_losses.keys():
@@ -56,12 +48,10 @@ def train(dataloder, model, device, criterion, optimizer, losses,
     patience = 0
     best_valid_score = 0.0
     best_model_param = None
+    train_results = list()
     
-    if args.method in ["Proposed", "CSR", "CSR_delta"]:
+    if args.method == "CSR":
         model.block_id = block_id
-    
-    # if args.method == "CSR":
-    #     model.update_block_id(block_id)
     
     ''' Training for Current Block '''
     for epoch in range(1, args.max_epoch + 1):
@@ -70,49 +60,44 @@ def train(dataloder, model, device, criterion, optimizer, losses,
         if args.method == "Reloop2":
             model.cur_epoch = epoch
         
-        should_plasticity_update = (
-            args.method in ["CSR","CSR_delta"] and
+        should_current_update = (
+            args.method == "CSR" and
             block_id >= 1 and
-            args.use_plasticity and
-            (epoch % args.update_plasticity_cycle == 0 or epoch == 1)
+            args.use_current and
+            ((epoch-1) % args.update_current_cycle == 0 or epoch == 1)
         )
-        if should_plasticity_update:
-            model.get_plasticity_prompts(eval_dataloader_list[-1])
+        if should_current_update:
+            model.get_current_interests(eval_dataloader_list[-1])
         
-        should_stability_update = (
-            args.method in ["CSR", "CSR_delta"] and
+        should_historical_update = (
+            args.method == "CSR" and
             model.use_history and
-            args.use_stability and
-            (epoch % args.update_stability_cycle == 0 or epoch == 1)
+            args.use_historical and
+            ((epoch-1) % args.update_historical_cycle == 0 or epoch == 1)
         )
-        if should_stability_update:
-            model.get_stability_prompts(eval_dataloader_list[-1])
+        if should_historical_update:
+            model.get_historical_interests(eval_dataloader_list[-1])
         
-        should_adaptively_update = (
+        should_PKA = (
             block_id >= args.update_start_block_id and
-            args.method in ["Proposed", "CSR", "CSR_delta"] and
-            args.adaptive_update and
-            (epoch % args.adaptive_update_cycle == 0 or epoch == 1)
+            args.method == "CSR" and
+            args.PKA and
+            ((epoch-1) % args.PKA_cycle == 0 or epoch == 1)
         )
         
-        if should_adaptively_update:
-            if args.method == "Proposed":
-                model.adaptive_update_for_Users(eval_dataloader_list[-1], new_user_ids, all_user = True)
-            elif args.method in ["CSR", "CSR_delta"]:
-                model.update_hisotry_new_users(eval_dataloader_list[-1], new_user_ids)
+        if should_PKA:
+            if args.method == "CSR":
+                model.update_history_new_users(eval_dataloader_list[-1], new_user_ids)
             
-            # print("\n\t[Test for New Users while Learning]")
-            # eval_result = evaluate(model, new_user_dataloader_list[-1], seen_max_item_id_list[-1], device, args.eval_K_list, mode = "Test", eval_mode = args.eval_mode, method = args.method)
-            # print(f"\t{eval_result}\n")
         
         epoch_losses = deepcopy(losses)
-        epoch_result = train_epoch(dataloder, model, device, epoch, criterion, optimizer, epoch_losses, args, block_id)
+        epoch_result = train_epoch(dataloder, model, device, epoch, criterion, optimizer, epoch_losses, args)
         print(f"\t{epoch_result}")
         
-        if args.method == "LWC_KD_PIW":
-            if args.LWC_KD_annealing and model.LWC_KD_lambda > 1e-8:
-                model.LWC_KD_lambda *= torch.exp(torch.tensor(-epoch)/args.LWC_KD_anneal_T).to(device)
-        
+        epoch_result['block_id'] = block_id
+        epoch_result['epoch'] = epoch
+        train_results.append(deepcopy(epoch_result))
+                
         ''' Validation for Continual Learing '''
         if epoch == 1 or epoch % args.val_cycle == 0:
             if args.cl_evaluate:
@@ -140,5 +125,8 @@ def train(dataloder, model, device, criterion, optimizer, losses,
                         print("\t[Early Stopping]")
                         break
         get_gpu_memory()
+        if args.fast_check and epoch >= 5:
+            print("\n[Breaking by fast check]\n")
+            break
         
-    return best_model_param
+    return best_model_param, train_results

@@ -19,6 +19,13 @@ def print_command_with_args(args, call_running_start = False):
     print(f"[CMD] {'python -u ' + ' '.join(sys.argv)}")
     print(f"[Args] {vars(args)}\n")
 
+def save_pickle(path, data):
+    file_path = path + ".pickle"
+    with open(file_path, 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+    print(f"[SAVE] {file_path}")
+
 def load_pickle(path):
     file_path = path + ".pickle"
     
@@ -85,9 +92,10 @@ def cl_result_to_csv(cl_total_test_result, eval_K_list, file_path = None):
 
     col_1 = [f"After Block {i}" for i in range(num_block) for _ in range(num_cl_metric)]
     col_2 = ["RA", "LA", "H_mean"] * num_block
-    df.columns = [col_1, col_2]
+    #df.columns = [col_1, col_2]
+    df.columns = pd.MultiIndex.from_arrays([col_1, col_2])
 
-    df.to_csv(f"{file_path}.csv")
+    df.to_csv(f"{file_path}.csv", header=True)
     print(f"[SAVE CL Result as DataFrame into CSV] {file_path}")
 
 def get_block_info(block, seen_user_ids, seen_item_ids):
@@ -108,9 +116,6 @@ def get_block_info(block, seen_user_ids, seen_item_ids):
     print(f"user:{len(cur_user_ids)}(new:{len(new_user_ids)}), item:{len(cur_item_ids)}(new:{len(new_item_ids)}), interactions:{num_interactions}, avg.seq_length:{block.groupby('user_id').count().iloc[:, -1].mean():.4f}, sparsity:{sparsity:.4f}")
     
     return cur_user_ids, cur_item_ids, new_user_ids
-
-
-
 
 def sparse_mat_diagonal_zero(sparse_mat):
     # Get the indices and values of the sparse matrix
@@ -206,3 +211,24 @@ def L2_normalization(x):
     norms = torch.norm(x, dim = -1, keepdim = True)
     norms = torch.clamp(norms, min = 1e-8)
     return (x / norms + 1e-8)
+
+def print_model_details(model):
+    print("=== Trainable Parameters ===")
+    total_params = 0
+    for name, p in model.named_parameters():
+        bytes_ = p.numel() * p.element_size()
+        total_params += bytes_
+        shape_str = str(tuple(p.shape))
+        print(f"{name:40s} | shape={shape_str:15s} | {bytes_/1e6:8.3f} MB")
+    
+    print("\n=== Registered Buffers ===")
+    total_bufs = 0
+    for name, b in model.named_buffers():
+        bytes_ = b.numel() * b.element_size()
+        total_bufs += bytes_
+        shape_str = str(tuple(b.shape))
+        print(f"{name:40s} | shape={shape_str:15s} | {bytes_/1e6:8.3f} MB")
+    
+    print(f"\nTotal params size: {total_params/1e6:.3f} MB")
+    print(f"Total buffers size: {total_bufs/1e6:.3f} MB")
+    print(f"Overall model size: {(total_params+total_bufs)/1e6:.3f} MB")
