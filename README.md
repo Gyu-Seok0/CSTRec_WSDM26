@@ -3,7 +3,7 @@
 This repository contains the source code for our paper: **Capturing User Interests from Data Streams for Continual Sequential Recommendation (CSTRec)**
 
 <p align="center">
-  <img src="images/method.png" alt="CSTRec Method Overview" width="100%">
+  <img src="images/method_fix.png" alt="CSTRec Method Overview" width="70%">
 </p>
 
 ---
@@ -25,7 +25,7 @@ conda activate CSTRec
 1. **Unzip the dataset**
 
    ```bash
-   unzip <dataset>.zip -d data/
+   unzip <dataset>.zip
    ```
 2. **Run the model**
    ```bash
