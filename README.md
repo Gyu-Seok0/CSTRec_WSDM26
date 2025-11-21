@@ -3,7 +3,7 @@
 This repository provides the source code of our paper: ["Capturing User Interests from Data Streams for Continual Sequential Recommendation (CSTRec)"](https://www.arxiv.org/abs/2506.07466), accepted at WSDM 2026.
 
 <p align="center">
-  <img src="images/method_fix.png" alt="CSTRec Method Overview" width="70%">
+  <img src="images/method_fix.png" alt="CSTRec Method Overview" width="100%">
 </p>
 
 ---
