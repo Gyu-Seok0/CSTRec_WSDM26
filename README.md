@@ -1,6 +1,6 @@
-# Overview
+# Capturing User Interests from Data Streams for Continual Sequential Recommendation
 
-This repository contains the source code for our paper: **Capturing User Interests from Data Streams for Continual Sequential Recommendation (CSTRec)**
+This repository provides the source code of our paper: ["Capturing User Interests from Data Streams for Continual Sequential Recommendation (CSTRec)"](https://www.arxiv.org/abs/2506.07466), accepted at WSDM 2026.
 
 <p align="center">
   <img src="images/method_fix.png" alt="CSTRec Method Overview" width="70%">
@@ -8,7 +8,7 @@ This repository contains the source code for our paper: **Capturing User Interes
 
 ---
 
-# Environment Setup
+## 1. Environment Setup
 
 ```bash
 # Create the Conda environment
@@ -20,7 +20,7 @@ conda activate CSTRec
 
 ---
 
-# Usage
+## 2. Usage
 
 1. **Unzip the dataset**
 
@@ -35,3 +35,15 @@ conda activate CSTRec
 
     Note: The run.sh script includes a --fc (fast check) option by default for quick testing.
 To execute the full training and evaluation pipeline, remove the --fc flag.
+
+## 3. Citation
+If you use this code or our method in your research, please cite our paper:
+
+```bibtex
+@article{lee2025leveraging,
+  title={Leveraging Historical and Current Interests for Continual Sequential Recommendation},
+  author={Lee, Gyuseok and Yoo, Hyunsik and Hwang, Junyoung and Kang, SeongKu and Yu, Hwanjo},
+  journal={arXiv preprint arXiv:2506.07466},
+  year={2025}
+}
+```
