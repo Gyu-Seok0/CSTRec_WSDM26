@@ -36,6 +36,8 @@ conda activate CSTRec
     Note: The run.sh script includes a --fc (fast check) option by default for quick testing.
 To execute the full training and evaluation pipeline, remove the --fc flag.
 
+---
+
 ## 3. Citation
 If you use this code or our method in your research, please cite our paper:
 
